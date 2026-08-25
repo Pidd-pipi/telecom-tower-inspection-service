@@ -33,7 +33,7 @@ func inspectionMatches(item TowerInspection, q InspectionQuery) bool {
 }
 
 func filterInspections(items []TowerInspection, q InspectionQuery) []TowerInspection {
-	out := items[:0]
+	out := make([]TowerInspection, 0, len(items))
 	for _, item := range items {
 		if inspectionMatches(item, q) {
 			out = append(out, item)
@@ -53,7 +53,7 @@ func findingMatches(f Finding, q InspectionQuery) bool {
 }
 
 func filterFindings(items []Finding, q InspectionQuery) []Finding {
-	out := items[:0]
+	out := make([]Finding, 0, len(items))
 	for _, item := range items {
 		if findingMatches(item, q) {
 			out = append(out, item)

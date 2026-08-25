@@ -88,7 +88,11 @@ func (s *InspectionStore) ListInspections(ctx context.Context) ([]TowerInspectio
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.inspections, nil
+	out := make([]TowerInspection, 0, len(s.inspections))
+	for _, item := range s.inspections {
+		out = append(out, item.Clone())
+	}
+	return out, nil
 }
 
 func (s *InspectionStore) UpdateInspectionStatus(ctx context.Context, id string, status InspectionStatus) error {

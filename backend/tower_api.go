@@ -59,7 +59,7 @@ func (a *inspectionAPI) list(w http.ResponseWriter, r *http.Request) {
 		opsJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	page := towerPage(items, InspectionQuery{Page: q.Page, PageSize: q.PageSize})
+	page := towerPage(items, q)
 	opsJSON(w, http.StatusOK, page)
 }
 
