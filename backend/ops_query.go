@@ -7,7 +7,11 @@ func opsMatch(item OpsRecord, query OpsQuery) bool {
 		return false
 	}
 	if query.Status != "" && item.Status != query.Status {
-		return false
+		// "active" is a working-set filter: tickets in review are still
+		// actively being worked, so they belong under the active umbrella.
+		if !(query.Status == OpsStatusActive && opsStatusActiveish(item.Status)) {
+			return false
+		}
 	}
 	if query.Priority != "" && item.Priority != query.Priority {
 		return false
