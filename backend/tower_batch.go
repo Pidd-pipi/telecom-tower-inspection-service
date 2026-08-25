@@ -37,6 +37,7 @@ func (p *TowerBatchProcessor) Run(ctx context.Context, cutoff string) ([]string,
 	if !p.acquireLease() {
 		return nil, fmt.Errorf("%w: another batch is already running", ErrOpsConflict)
 	}
+	defer p.releaseLease()
 	cutoffTime, err := time.Parse(time.RFC3339, cutoff)
 	if err != nil {
 		return nil, fmt.Errorf("%w: invalid cutoff", ErrOpsInvalid)
@@ -46,7 +47,6 @@ func (p *TowerBatchProcessor) Run(ctx context.Context, cutoff string) ([]string,
 		return nil, err
 	}
 	completed := []string{}
-	var last TowerInspection
 	for _, item := range items {
 		if item.Status != InspectionInProgress {
 			continue
@@ -58,12 +58,12 @@ func (p *TowerBatchProcessor) Run(ctx context.Context, cutoff string) ([]string,
 			return completed, err
 		}
 		completed = append(completed, item.ID)
-		last = item
-		defer p.audit.Add(item.TowerID, "batch_completed", "batch")
-		defer func() {
-			p.notify.Publish(TowerEvent{TowerID: last.TowerID, Type: "batch_completed", Actor: "batch"})
-		}()
+		// Record the audit event and notify subscribers immediately, while we
+		// are still on this inspection's tower. Deferring these per-iteration
+		// would queue them for the function's return (reverse order) and close
+		// over a shared loop variable, sending every notice to the last tower.
+		p.audit.Add(item.TowerID, "batch_completed", "batch")
+		p.notify.Publish(TowerEvent{TowerID: item.TowerID, Type: "batch_completed", Actor: "batch"})
 	}
-	defer p.releaseLease()
 	return completed, nil
 }

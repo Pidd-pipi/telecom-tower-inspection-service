@@ -28,7 +28,11 @@ func (p *TowerPlanner) Overdue(item TowerInspection, now time.Time) bool {
 	if item.Status == InspectionCompleted || item.Status == InspectionCancelled {
 		return false
 	}
-	return true
+	scheduled, err := time.Parse(time.RFC3339, item.ScheduledAt)
+	if err != nil {
+		return false
+	}
+	return scheduled.Before(now)
 }
 
 // DaysUntilDue returns whole days from now until the scheduled date; negative when overdue.
