@@ -62,5 +62,8 @@ func opsNoStore(w http.ResponseWriter)    { w.Header().Set("Cache-Control", "no-
 func opsRequestID(r *http.Request) string { return r.Header.Get("X-Request-ID") }
 
 func opsTransitionContext(r *http.Request) (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), 3*time.Second)
+	if r == nil {
+		return context.WithTimeout(context.Background(), 3*time.Second)
+	}
+	return context.WithTimeout(r.Context(), 3*time.Second)
 }

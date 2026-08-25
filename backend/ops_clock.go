@@ -22,7 +22,9 @@ func opsContext(parent context.Context, timeout time.Duration) (context.Context,
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
-	return context.WithTimeout(context.Background(), timeout)
+	// Derive from parent so a cancellation (e.g. the client disconnecting) on
+	// the request context propagates here instead of being silently dropped.
+	return context.WithTimeout(parent, timeout)
 }
 func opsDeadline(ctx context.Context) bool {
 	if ctx == nil {
@@ -42,8 +44,17 @@ func opsBackoff(attempt int) time.Duration {
 	return time.Duration(1<<uint(attempt-1)) * 20 * time.Millisecond
 }
 func opsDelay(ctx context.Context, duration time.Duration) error {
-	time.Sleep(duration)
-	return nil
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 func opsAge(now time.Time, stamp string) time.Duration {
 	parsed, err := opsParseStamp(stamp)

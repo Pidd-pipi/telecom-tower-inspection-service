@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -141,7 +140,7 @@ func (h *opsAPIHandler) transition(w http.ResponseWriter, r *http.Request) {
 		opsJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target status"})
 		return
 	}
-	record, err := h.service.Transition(context.Background(), id, req.Expected, req.Target, req.Actor)
+	record, err := h.service.Transition(r.Context(), id, req.Expected, req.Target, req.Actor)
 	if err != nil {
 		opsJSON(w, opsStatusForError(err), map[string]string{"error": err.Error()})
 		return
