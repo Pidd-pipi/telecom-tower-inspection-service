@@ -1,0 +1,6 @@
+.env
+*.test
+coverage.out
+server
+backend/server
+dist/
