@@ -102,6 +102,9 @@ func (s *InspectionService) RecordFinding(ctx context.Context, req RecordFinding
 	if strings.TrimSpace(req.TowerID) == "" {
 		return Finding{}, fmt.Errorf("%w: tower id required", ErrOpsInvalid)
 	}
+	if !findingSeverityValid(req.Severity) {
+		return Finding{}, fmt.Errorf("%w: severity must be low, medium, or high", ErrOpsInvalid)
+	}
 	finding := Finding{
 		ID:           newFindingID(),
 		TowerID:      req.TowerID,
@@ -179,3 +182,13 @@ func (s *InspectionService) Risk(ctx context.Context, towerID string) (RiskProfi
 
 func (s *InspectionService) Audit(id string) []TowerEvent { return s.audit.For(id) }
 func (s *InspectionService) Store() *InspectionStore      { return s.store }
+
+// findingSeverityValid reports whether a finding severity is one of the allowed values.
+func findingSeverityValid(s FindingSeverity) bool {
+	switch s {
+	case FindingSeverityLow, FindingSeverityMedium, FindingSeverityHigh:
+		return true
+	default:
+		return false
+	}
+}
