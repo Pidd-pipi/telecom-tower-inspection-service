@@ -28,7 +28,9 @@ func newTowerAudit() *TowerAudit { return &TowerAudit{events: []TowerEvent{}} }
 
 func (a *TowerAudit) Add(towerID, typ, actor string) TowerEvent {
 	event := TowerEvent{ID: newTowerEventID(), TowerID: towerID, Type: typ, Actor: actor, At: time.Now().UTC().Format(time.RFC3339Nano)}
+	a.mu.Lock()
 	a.events = append(a.events, event)
+	a.mu.Unlock()
 	return event
 }
 
