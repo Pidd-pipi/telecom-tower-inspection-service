@@ -12,7 +12,6 @@ type inspectionAPI struct {
 	service  *InspectionService
 	exporter *InspectionExporter
 	notifier *TowerNotifier
-	stats    *TowerStats
 	reporter *TowerReporter
 }
 
@@ -22,7 +21,6 @@ func newInspectionAPI(service *InspectionService) *inspectionAPI {
 		service:  service,
 		exporter: newInspectionExporter(store, service.audit),
 		notifier: newTowerNotifier(),
-		stats:    newTowerStats(),
 		reporter: newTowerReporter(),
 	}
 }

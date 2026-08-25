@@ -8,17 +8,22 @@ import (
 	"example.com/telecom-tower-inspection-service/web"
 	"log"
 	"net/http"
+	"time"
 )
 
 func main() {
 	address := ":" + config.Port()
 	log.Printf("telecom-tower-inspection-service listening on %s", address)
-	if err := serveAddress(address, newRootHandler()); err != nil {
+	handler, shutdown := newRootHandler()
+	if err := serveAddress(address, handler, shutdown); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func newRootHandler() http.Handler {
+// newRootHandler builds the root HTTP handler and returns a shutdown function
+// that must be called when the server is stopping, so background tasks (the
+// stats ticker) come down cleanly with the process.
+func newRootHandler() (http.Handler, func()) {
 	seedCounters()
 	inspStore := newInspectionStore(seedTowers())
 	for _, item := range seedInspections() {
@@ -31,6 +36,11 @@ func newRootHandler() http.Handler {
 	insp := newInspectionAPI(service)
 	extra := newTowerHandlers(service)
 	ops := newOpsAPIHandler(newOpsService(seedOpsRecords()))
+
+	// Seed the summary cache and start a low-frequency refresh ticker as a
+	// backstop for staleness; data mutations invalidate the cache immediately,
+	// so this only matters for paths that bypass Invalidate.
+	extra.startBackgroundStats(30 * time.Second)
 
 	mux := http.NewServeMux()
 	httpapi.Register(store.New(), web.FS, mux)
@@ -46,5 +56,5 @@ func newRootHandler() http.Handler {
 	mux.Handle("/api/report", extra.routes())
 	mux.Handle("/ops/", ops)
 	mux.Handle("/ops", ops)
-	return mux
+	return mux, extra.Shutdown
 }

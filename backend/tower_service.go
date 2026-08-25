@@ -12,6 +12,11 @@ type InspectionService struct {
 	planner *TowerPlanner
 	risk    *TowerRiskEngine
 	clock   OpsClock
+
+	// onStatsInvalidate, if set, is notified after any mutation that affects
+	// the cached tower summary, so the stats cache can be marked stale and
+	// recomputed on the next read instead of serving a stale value.
+	onStatsInvalidate func()
 }
 
 func newInspectionService(store *InspectionStore) *InspectionService {
@@ -21,6 +26,20 @@ func newInspectionService(store *InspectionStore) *InspectionService {
 		planner: newTowerPlanner(newOpsClock()),
 		risk:    newTowerRiskEngine(),
 		clock:   newOpsClock(),
+	}
+}
+
+// setStatsInvalidator registers a callback invoked after every mutation that
+// changes summary-relevant data. It is optional; the service works without it.
+func (s *InspectionService) setStatsInvalidator(fn func()) {
+	s.onStatsInvalidate = fn
+}
+
+// invalidateStats notifies the registered stats cache, if any, that the cached
+// summary is now stale and should be recomputed on the next read.
+func (s *InspectionService) invalidateStats() {
+	if s.onStatsInvalidate != nil {
+		s.onStatsInvalidate()
 	}
 }
 
@@ -55,6 +74,7 @@ func (s *InspectionService) Schedule(ctx context.Context, req ScheduleRequest) (
 		return TowerInspection{}, err
 	}
 	s.audit.Add(item.ID, "scheduled", req.Inspector)
+	s.invalidateStats()
 	return item, nil
 }
 
@@ -71,6 +91,7 @@ func (s *InspectionService) Start(ctx context.Context, id string) (TowerInspecti
 	}
 	s.audit.Add(id, "started", item.Inspector)
 	item.Status = InspectionInProgress
+	s.invalidateStats()
 	return item, nil
 }
 
@@ -87,6 +108,7 @@ func (s *InspectionService) Complete(ctx context.Context, id string) (TowerInspe
 	}
 	s.audit.Add(id, "completed", item.Inspector)
 	item.Status = InspectionCompleted
+	s.invalidateStats()
 	return item, nil
 }
 
@@ -132,6 +154,7 @@ func (s *InspectionService) RecordFinding(ctx context.Context, req RecordFinding
 		}
 		s.audit.Add(req.TowerID, "order_generated", "system")
 	}
+	s.invalidateStats()
 	return finding, nil
 }
 
@@ -149,6 +172,7 @@ func (s *InspectionService) AssignOrder(ctx context.Context, id, assignee string
 	order.Status = WorkOrderAssigned
 	order.Assignee = assignee
 	s.audit.Add(order.TowerID, "order_assigned", assignee)
+	s.invalidateStats()
 	return order, nil
 }
 
@@ -165,6 +189,7 @@ func (s *InspectionService) ResolveOrder(ctx context.Context, id string) (WorkOr
 	}
 	order.Status = WorkOrderResolved
 	s.audit.Add(order.TowerID, "order_resolved", order.Assignee)
+	s.invalidateStats()
 	return order, nil
 }
 

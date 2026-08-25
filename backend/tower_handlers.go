@@ -15,14 +15,24 @@ type towerHandlers struct {
 	exporter *InspectionExporter
 	stats    *TowerStats
 	reporter *TowerReporter
+
+	// statsStop closes to signal the background stats ticker to exit;
+	// statsDone is closed by the ticker goroutine once it has fully stopped.
+	statsStop chan struct{}
+	statsDone <-chan struct{}
 }
 
 func newTowerHandlers(service *InspectionService) *towerHandlers {
 	store := service.Store()
+	stats := newTowerStats()
+	// Keep the stats cache fresh: mark it stale whenever inspection, finding
+	// or work-order data changes, so the summary endpoint never serves a
+	// cached value computed before the latest mutation.
+	service.setStatsInvalidator(stats.Invalidate)
 	return &towerHandlers{
 		service:  service,
 		exporter: newInspectionExporter(store, service.audit),
-		stats:    newTowerStats(),
+		stats:    stats,
 		reporter: newTowerReporter(),
 	}
 }
@@ -115,7 +125,10 @@ func (h *towerHandlers) risk(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *towerHandlers) summary(w http.ResponseWriter, r *http.Request) {
-	summary, err := h.stats.Refresh(r.Context(), h.service.Store())
+	// Summary recomputes only when the cache is stale (set by Invalidate after
+	// data changes) or absent; otherwise it serves the cached value. This keeps
+	// the numbers correct without a full recompute on every request.
+	summary, err := h.stats.Summary(r.Context(), h.service.Store())
 	if err != nil {
 		opsJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -149,6 +162,33 @@ func (h *towerHandlers) report(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	opsJSON(w, http.StatusOK, report)
+}
+
+// startBackgroundStats launches a ticker that periodically refreshes the
+// summary cache. It is a safety net for cases where Invalidate was not wired
+// (e.g. seed data or future callers) and keeps the cache from sitting stale.
+// Calling it twice is a no-op.
+func (h *towerHandlers) startBackgroundStats(interval time.Duration) {
+	if h.statsStop != nil {
+		return
+	}
+	stop := make(chan struct{})
+	h.statsStop = stop
+	h.statsDone = startTowerStatsTicker(h.stats, h.service.Store(), interval, stop)
+}
+
+// Shutdown stops the background stats ticker and blocks until it has exited,
+// so the process can come down cleanly instead of leaking a goroutine. It is
+// safe to call more than once.
+func (h *towerHandlers) Shutdown() {
+	if h.statsStop == nil {
+		return
+	}
+	close(h.statsStop)
+	if h.statsDone != nil {
+		<-h.statsDone
+	}
+	h.statsStop = nil
 }
 
 func (h *towerHandlers) routes() *http.ServeMux {

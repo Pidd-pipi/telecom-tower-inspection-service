@@ -15,11 +15,11 @@ import (
 
 var requestSequence uint64
 
-func serveAddress(address string, handler http.Handler) error {
-	return serveHTTP(newEnterpriseServer(address, handler))
+func serveAddress(address string, handler http.Handler, shutdown func()) error {
+	return serveHTTP(newEnterpriseServer(address, handler), shutdown)
 }
 
-func serveHTTP(server *http.Server) error {
+func serveHTTP(server *http.Server, shutdown func()) error {
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- server.ListenAndServe()
@@ -31,6 +31,11 @@ func serveHTTP(server *http.Server) error {
 
 	select {
 	case err := <-errCh:
+		// Server failed on its own (e.g. bad bind). Stop background tasks so the
+		// process does not leak goroutines before exiting.
+		if shutdown != nil {
+			shutdown()
+		}
 		if errors.Is(err, http.ErrServerClosed) {
 			return nil
 		}
@@ -38,7 +43,13 @@ func serveHTTP(server *http.Server) error {
 	case <-signals:
 		shutdownContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		return server.Shutdown(shutdownContext)
+		err := server.Shutdown(shutdownContext)
+		// Drain background tasks after the HTTP server stops, so the process
+		// exits cleanly instead of hanging on a leaked ticker goroutine.
+		if shutdown != nil {
+			shutdown()
+		}
+		return err
 	}
 }
 
