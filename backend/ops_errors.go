@@ -35,7 +35,7 @@ func opsCode(err error) string {
 		return typed.Code
 	}
 	switch {
-	case err == ErrOpsNotFound:
+	case errors.Is(err, ErrOpsNotFound):
 		return "not_found"
 	case errors.Is(err, ErrOpsConflict):
 		return "conflict"

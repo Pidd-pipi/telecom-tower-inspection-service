@@ -30,7 +30,7 @@ func (s *OpsStore) Get(ctx context.Context, id string) (OpsRecord, error) {
 	defer s.mu.RUnlock()
 	item, ok := s.items[id]
 	if !ok {
-		detail := fmt.Errorf("store get %s: %v", id, ErrOpsNotFound)
+		detail := fmt.Errorf("store get %s: %w", id, ErrOpsNotFound)
 		return OpsRecord{}, detail
 	}
 	return item.Clone(), nil
@@ -74,11 +74,11 @@ func (s *OpsStore) Update(ctx context.Context, item OpsRecord, expected int) err
 	defer s.mu.Unlock()
 	current, ok := s.items[item.ID]
 	if !ok {
-		detail := fmt.Errorf("store update %s: %v", item.ID, ErrOpsNotFound)
+		detail := fmt.Errorf("store update %s: %w", item.ID, ErrOpsNotFound)
 		return detail
 	}
 	if expected > 0 && current.Revision != expected {
-		detail := fmt.Errorf("store conflict %s: %v", item.ID, ErrOpsConflict)
+		detail := fmt.Errorf("store conflict %s: %w", item.ID, ErrOpsConflict)
 		return detail
 	}
 	item.Revision = current.Revision + 1
@@ -95,7 +95,7 @@ func (s *OpsStore) Delete(ctx context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.items[id]; !ok {
-		detail := fmt.Errorf("store delete %s: %v", id, ErrOpsNotFound)
+		detail := fmt.Errorf("store delete %s: %w", id, ErrOpsNotFound)
 		return detail
 	}
 	delete(s.items, id)
